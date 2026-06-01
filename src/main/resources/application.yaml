@@ -1,0 +1,69 @@
+spring:
+  application:
+    name: stellnula-service
+  datasource:
+    url: ${STELLNULA_DATASOURCE_URL:jdbc:postgresql://192.168.1.14:5432/stellnula}
+    username: ${STELLNULA_DATASOURCE_USERNAME:stellhub}
+    password: ${STELLNULA_DATASOURCE_PASSWORD:admin}
+    driver-class-name: org.postgresql.Driver
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+  health:
+    db:
+      enabled: false
+
+stellnula:
+  data-plane:
+    server-id: ${STELLNULA_SERVER_ID:stellnula-local}
+    http-address: ${STELLNULA_HTTP_ADDRESS:http://127.0.0.1:8060}
+    grpc-address: ${STELLNULA_GRPC_ADDRESS:127.0.0.1:9090}
+    region: ${STELLNULA_REGION:default}
+    zone: ${STELLNULA_ZONE:default}
+    weight: ${STELLNULA_WEIGHT:100}
+    address-ttl-seconds: ${STELLNULA_ADDRESS_TTL_SECONDS:60}
+    watch-timeout-millis: ${STELLNULA_WATCH_TIMEOUT_MILLIS:30000}
+    heartbeat-millis: ${STELLNULA_HEARTBEAT_MILLIS:10000}
+    refresh-interval-millis: ${STELLNULA_REFRESH_INTERVAL_MILLIS:5000}
+    max-concurrent-watch: ${STELLNULA_MAX_CONCURRENT_WATCH:1000}
+    max-request-labels: ${STELLNULA_MAX_REQUEST_LABELS:64}
+    max-config-content-bytes: ${STELLNULA_MAX_CONFIG_CONTENT_BYTES:1048576}
+    node-expire-millis: ${STELLNULA_NODE_EXPIRE_MILLIS:30000}
+    node-drain-millis: ${STELLNULA_NODE_DRAIN_MILLIS:60000}
+    node-probe-timeout-millis: ${STELLNULA_NODE_PROBE_TIMEOUT_MILLIS:2000}
+    node-probe-failure-threshold: ${STELLNULA_NODE_PROBE_FAILURE_THRESHOLD:3}
+    graceful-shutdown-wait-millis: ${STELLNULA_GRACEFUL_SHUTDOWN_WAIT_MILLIS:5000}
+    cache-refresh-backoff-millis: ${STELLNULA_CACHE_REFRESH_BACKOFF_MILLIS:5000}
+    cache-refresh-max-backoff-millis: ${STELLNULA_CACHE_REFRESH_MAX_BACKOFF_MILLIS:60000}
+    cache-stale-threshold-millis: ${STELLNULA_CACHE_STALE_THRESHOLD_MILLIS:60000}
+    event-window-size: ${STELLNULA_EVENT_WINDOW_SIZE:10000}
+    current-api-version: ${STELLNULA_CURRENT_API_VERSION:v1}
+    min-api-version: ${STELLNULA_MIN_API_VERSION:v1}
+    min-sdk-version: ${STELLNULA_MIN_SDK_VERSION:0.1.0}
+    server-version: ${STELLNULA_SERVER_VERSION:0.0.1}
+    default-page-size: ${STELLNULA_DEFAULT_PAGE_SIZE:500}
+    max-page-size: ${STELLNULA_MAX_PAGE_SIZE:2000}
+    max-response-payload-bytes: ${STELLNULA_MAX_RESPONSE_PAYLOAD_BYTES:1048576}
+    compression-threshold-bytes: ${STELLNULA_COMPRESSION_THRESHOLD_BYTES:4096}
+    large-file-reference-threshold-bytes: ${STELLNULA_LARGE_FILE_REFERENCE_THRESHOLD_BYTES:262144}
+    client-retry-initial-millis: ${STELLNULA_CLIENT_RETRY_INITIAL_MILLIS:500}
+    client-retry-max-millis: ${STELLNULA_CLIENT_RETRY_MAX_MILLIS:30000}
+    client-retry-multiplier: ${STELLNULA_CLIENT_RETRY_MULTIPLIER:2.0}
+    client-retry-jitter-ratio: ${STELLNULA_CLIENT_RETRY_JITTER_RATIO:0.2}
+    sensitive-encryption-key: ${STELLNULA_SENSITIVE_ENCRYPTION_KEY:stellnula-local-dev-sensitive-key}
+    sensitive-access-label: ${STELLNULA_SENSITIVE_ACCESS_LABEL:sensitiveConfigAccess}
+
+stellflux:
+  grpc:
+    server:
+      port: ${STELLNULA_GRPC_PORT:9090}

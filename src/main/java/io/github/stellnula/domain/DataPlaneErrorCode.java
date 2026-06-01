@@ -1,0 +1,12 @@
+package io.github.stellnula.domain;
+
+public enum DataPlaneErrorCode {
+  BAD_REQUEST,
+  UNSUPPORTED_API_VERSION,
+  SDK_UPGRADE_REQUIRED,
+  TOO_MANY_WATCHES,
+  PAYLOAD_TOO_LARGE,
+  CONFIG_NOT_FOUND,
+  FULL_SYNC_REQUIRED,
+  INTERNAL_ERROR
+}

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" role="img" aria-labelledby="title desc">
+  <title id="title">Client server protocol flow</title>
+  <desc id="desc">HTTP bootstrap and gRPC watch flow for Stellnula clients.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334e5c" />
+    </marker>
+    <style>
+      .bg { fill: #fbfcfd; }
+      .lane { fill: #eef5f7; stroke: #9ab0ba; stroke-width: 1.4; rx: 10; }
+      .client { fill: #ffffff; stroke: #4e7280; stroke-width: 1.8; rx: 8; }
+      .server { fill: #fff8ed; stroke: #9b7650; stroke-width: 1.8; rx: 8; }
+      .cache { fill: #eef8ef; stroke: #5f8d66; stroke-width: 1.8; rx: 8; }
+      .text { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #1d2d35; font-size: 19px; }
+      .small { font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; fill: #37535f; font-size: 14px; }
+      .line { stroke: #334e5c; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .grpc { stroke: #7f5f2e; stroke-width: 2.2; fill: none; marker-end: url(#arrow); }
+      .async { stroke: #5f8d66; stroke-width: 2; stroke-dasharray: 7 7; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect class="bg" x="0" y="0" width="1180" height="760" />
+
+  <rect class="lane" x="60" y="40" width="310" height="680" />
+  <rect class="lane" x="435" y="40" width="310" height="680" />
+  <rect class="lane" x="810" y="40" width="310" height="680" />
+  <text class="text" x="215" y="78" text-anchor="middle">客户端 SDK</text>
+  <text class="text" x="590" y="78" text-anchor="middle">HTTP 域名入口</text>
+  <text class="text" x="965" y="78" text-anchor="middle">gRPC 数据面节点</text>
+
+  <rect class="cache" x="105" y="118" width="220" height="62" />
+  <text class="text" x="215" y="144" text-anchor="middle">读取本地文件</text>
+  <text class="small" x="215" y="166" text-anchor="middle">恢复本地全量内存</text>
+
+  <rect class="server" x="480" y="218" width="220" height="70" />
+  <text class="text" x="590" y="246" text-anchor="middle">HTTP bootstrap</text>
+  <text class="small" x="590" y="269" text-anchor="middle">返回快照 + 地址列表</text>
+
+  <rect class="client" x="105" y="328" width="220" height="72" />
+  <text class="text" x="215" y="356" text-anchor="middle">选择服务端节点</text>
+  <text class="small" x="215" y="379" text-anchor="middle">Weighted Rendezvous Hash</text>
+
+  <rect class="server" x="855" y="328" width="220" height="72" />
+  <text class="text" x="965" y="356" text-anchor="middle">gRPC Watch</text>
+  <text class="small" x="965" y="379" text-anchor="middle">基于 revision 长轮询</text>
+
+  <rect class="server" x="855" y="460" width="220" height="72" />
+  <text class="text" x="965" y="488" text-anchor="middle">返回变更</text>
+  <text class="small" x="965" y="511" text-anchor="middle">CHANGED / NO_CHANGE</text>
+
+  <rect class="cache" x="105" y="460" width="220" height="72" />
+  <text class="text" x="215" y="488" text-anchor="middle">更新本地状态</text>
+  <text class="small" x="215" y="511" text-anchor="middle">内存优先，文件异步</text>
+
+  <rect class="server" x="480" y="590" width="220" height="72" />
+  <text class="text" x="590" y="618" text-anchor="middle">HTTP full / delta</text>
+  <text class="small" x="590" y="641" text-anchor="middle">校验失败补偿拉取</text>
+
+  <path class="line" d="M325 149 C400 149 405 253 478 253" />
+  <path class="line" d="M480 288 C415 318 390 354 327 364" />
+  <path class="line" d="M325 364 L853 364" />
+  <path class="grpc" d="M965 400 L965 458" />
+  <path class="grpc" d="M855 496 L327 496" />
+  <path class="async" d="M215 532 L215 660" />
+  <text class="small" x="246" y="606">异步写入快照文件</text>
+  <path class="line" d="M325 496 C410 520 420 625 478 625" />
+  <path class="line" d="M700 625 C790 610 805 520 855 505" />
+
+  <text class="small" x="430" y="213">首次只依赖域名</text>
+  <text class="small" x="540" y="349">地址列表 hash 选点</text>
+  <text class="small" x="620" y="492">revision / checksum 校验</text>
+</svg>

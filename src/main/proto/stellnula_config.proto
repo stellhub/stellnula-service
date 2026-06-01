@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package stellnula.config.v1;
+
+option java_multiple_files = true;
+option java_package = "io.github.stellnula.protocol.grpc.v1";
+
+service StellnulaConfigService {
+  rpc Watch(WatchRequest) returns (WatchResponse);
+  rpc FetchFull(FetchFullRequest) returns (ConfigSnapshot);
+  rpc FetchDelta(FetchDeltaRequest) returns (ConfigDelta);
+  rpc ReportClientState(ClientStateRequest) returns (ClientStateResponse);
+}
+
+message ClientContext {
+  string app_id = 1;
+  string client_id = 2;
+  string env = 3;
+  string region = 4;
+  string zone = 5;
+  string cluster = 6;
+  string namespace = 7;
+  string client_ip = 8;
+  map<string, string> labels = 9;
+  repeated SubscriptionFilter subscriptions = 10;
+  string group = 11;
+}
+
+message SubscriptionFilter {
+  string group = 1;
+  string subscription_type = 2;
+  string subscription_key = 3;
+}
+
+message WatchRequest {
+  ClientContext context = 1;
+  int64 current_revision = 2;
+  int32 timeout_millis = 3;
+  string snapshot_checksum = 4;
+  ProtocolOptions options = 5;
+}
+
+message WatchResponse {
+  WatchStatus status = 1;
+  int64 latest_revision = 2;
+  string latest_checksum = 3;
+  bool full_sync_required = 4;
+  repeated ConfigChange changes = 5;
+  ProtocolMeta meta = 6;
+  ErrorInfo error = 7;
+  string full_sync_reason = 8;
+}
+
+enum WatchStatus {
+  WATCH_STATUS_UNSPECIFIED = 0;
+  CHANGED = 1;
+  NO_CHANGE = 2;
+  CLIENT_TOO_OLD = 3;
+  UNAUTHORIZED = 4;
+}
+
+message FetchFullRequest {
+  ClientContext context = 1;
+  ProtocolOptions options = 2;
+}
+
+message FetchDeltaRequest {
+  ClientContext context = 1;
+  int64 from_revision = 2;
+  ProtocolOptions options = 3;
+}
+
+message ConfigSnapshot {
+  int64 revision = 1;
+  string checksum = 2;
+  repeated ConfigEntry entries = 3;
+  ProtocolMeta meta = 4;
+}
+
+message ConfigDelta {
+  int64 from_revision = 1;
+  int64 to_revision = 2;
+  string checksum = 3;
+  repeated ConfigChange changes = 4;
+  ProtocolMeta meta = 5;
+  bool full_sync_required = 6;
+  string full_sync_reason = 7;
+}
+
+message ConfigChange {
+  ChangeType type = 1;
+  ConfigEntry entry = 2;
+}
+
+enum ChangeType {
+  CHANGE_TYPE_UNSPECIFIED = 0;
+  UPSERT = 1;
+  DELETE = 2;
+  GRAY_CHANGED = 3;
+}
+
+message ConfigEntry {
+  string config_key = 1;
+  string content_type = 2;
+  string value = 3;
+  int64 version = 4;
+  bool encrypted = 5;
+  string config_id = 6;
+  int64 revision = 7;
+  string matched_type = 8;
+  int64 matched_gray_id = 9;
+  string matched_gray_name = 10;
+  int64 gray_version = 11;
+  bool deleted = 12;
+  string value_encoding = 13;
+  string delivery_mode = 14;
+  int32 value_size_bytes = 15;
+  string value_ref = 16;
+}
+
+message ClientStateRequest {
+  ClientContext context = 1;
+  int64 local_revision = 2;
+  string local_checksum = 3;
+  bool local_file_loaded = 4;
+  string last_success_sync_time = 5;
+  ProtocolOptions options = 6;
+  string sdk_version = 7;
+  string host_name = 8;
+}
+
+message ClientStateResponse {
+  bool accepted = 1;
+  int64 server_revision = 2;
+  ProtocolMeta meta = 3;
+  ErrorInfo error = 4;
+}
+
+message ProtocolOptions {
+  string api_version = 1;
+  string sdk_version = 2;
+  repeated string accepted_compressions = 3;
+  int32 page_size = 4;
+  string page_token = 5;
+  int32 max_payload_bytes = 6;
+  bool accept_large_file_reference = 7;
+}
+
+message ProtocolMeta {
+  string api_version = 1;
+  string min_supported_api_version = 2;
+  string server_version = 3;
+  string sdk_compatibility = 4;
+  string compression = 5;
+  int32 page_size = 6;
+  string next_page_token = 7;
+  bool has_more = 8;
+  int64 retry_after_millis = 9;
+  RetryBackoffHint retry_backoff = 10;
+  bool full_sync_required = 11;
+  string full_sync_reason = 12;
+}
+
+message RetryBackoffHint {
+  int64 initial_delay_millis = 1;
+  int64 max_delay_millis = 2;
+  double multiplier = 3;
+  double jitter_ratio = 4;
+}
+
+message ErrorInfo {
+  string code = 1;
+  string message = 2;
+  bool retryable = 3;
+  int64 retry_after_millis = 4;
+  RetryBackoffHint retry_backoff = 5;
+  bool full_sync_required = 6;
+  string full_sync_reason = 7;
+}

@@ -6,9 +6,6 @@ spring:
     username: ${STELLNULA_DATASOURCE_USERNAME:stellhub}
     password: ${STELLNULA_DATASOURCE_PASSWORD:admin}
     driver-class-name: org.postgresql.Driver
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
 
 management:
   endpoints:

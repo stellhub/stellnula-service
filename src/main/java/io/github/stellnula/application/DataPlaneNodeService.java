@@ -2,6 +2,7 @@ package io.github.stellnula.application;
 
 import io.github.stellnula.cache.DataPlaneNodeCache;
 import io.github.stellnula.config.DataPlaneProperties;
+import io.github.stellnula.domain.DataPlaneNodeEndpoint;
 import io.github.stellnula.domain.DataPlaneNodeRecord;
 import io.github.stellnula.domain.ServerEndpoint;
 import io.github.stellnula.repository.DataPlaneNodeRegistration;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class DataPlaneNodeService {
 
   private final DataPlaneProperties properties;
+  private final DataPlaneNodeEndpointResolver endpointResolver;
   private final DataPlaneNodeRepository repository;
   private final DataPlaneNodeCache cache;
   private final DataPlaneMetrics metrics;
@@ -29,12 +31,13 @@ public class DataPlaneNodeService {
     NodeLifecycle lifecycle = localLifecycle.get();
     int activeWatchCount = metrics.activeWatchCount();
     double loadScore = loadScore(activeWatchCount);
+    DataPlaneNodeEndpoint endpoint = endpointResolver.current();
     metrics.recordNodeLoad(activeWatchCount, loadScore);
     repository.upsertCurrentNode(
         new DataPlaneNodeRegistration(
-            properties.serverId(),
-            properties.httpAddress(),
-            properties.grpcAddress(),
+            endpoint.serverId(),
+            endpoint.httpAddress(),
+            endpoint.grpcAddress(),
             properties.region(),
             properties.zone(),
             properties.weight(),
@@ -62,7 +65,7 @@ public class DataPlaneNodeService {
 
   /** 将节点切换为 DRAINING，停止进入客户端新地址列表。 */
   public void drainNode(String serverId, String reason) {
-    if (properties.serverId().equals(serverId)) {
+    if (isCurrentNode(serverId)) {
       localLifecycle.set(new NodeLifecycle("DRAINING", false));
     }
     repository.updateNodeStatus(serverId, "DRAINING", false, reason);
@@ -71,7 +74,7 @@ public class DataPlaneNodeService {
 
   /** 将节点恢复为 ACTIVE，允许重新进入客户端新地址列表。 */
   public void activateNode(String serverId, String reason) {
-    if (properties.serverId().equals(serverId)) {
+    if (isCurrentNode(serverId)) {
       localLifecycle.set(new NodeLifecycle("ACTIVE", true));
     }
     repository.updateNodeStatus(serverId, "ACTIVE", true, reason);
@@ -80,7 +83,7 @@ public class DataPlaneNodeService {
 
   /** 将节点切换为 OFFLINE。 */
   public void offlineNode(String serverId, String reason) {
-    if (properties.serverId().equals(serverId)) {
+    if (isCurrentNode(serverId)) {
       localLifecycle.set(new NodeLifecycle("OFFLINE", false));
     }
     repository.updateNodeStatus(serverId, "OFFLINE", false, reason);
@@ -96,6 +99,15 @@ public class DataPlaneNodeService {
     double watchRatio = (double) activeWatchCount / Math.max(1, properties.maxConcurrentWatch());
     double weightFactor = 100.0 / Math.max(1, properties.weight());
     return Math.max(0, watchRatio * weightFactor);
+  }
+
+  /** 获取当前数据面节点 ID。 */
+  public String currentServerId() {
+    return endpointResolver.current().serverId();
+  }
+
+  private boolean isCurrentNode(String serverId) {
+    return currentServerId().equals(serverId);
   }
 
   private List<ServerEndpoint> preferLocalZone(List<ServerEndpoint> endpoints) {

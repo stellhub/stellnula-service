@@ -63,18 +63,18 @@ public class DataPlaneNodeController {
   @PostMapping("/self/drain")
   public LifecycleResponse drainSelf(
       @Valid @RequestBody(required = false) LifecycleRequest request) {
-    nodeService.drainNode(properties.serverId(), reason(request));
-    return LifecycleResponse.of(
-        properties.serverId(), "DRAINING", false, properties.addressTtlSeconds());
+    String serverId = nodeService.currentServerId();
+    nodeService.drainNode(serverId, reason(request));
+    return LifecycleResponse.of(serverId, "DRAINING", false, properties.addressTtlSeconds());
   }
 
   /** 将当前节点切换为 OFFLINE。 */
   @PostMapping("/self/offline")
   public LifecycleResponse offlineSelf(
       @Valid @RequestBody(required = false) LifecycleRequest request) {
-    nodeService.offlineNode(properties.serverId(), reason(request));
-    return LifecycleResponse.of(
-        properties.serverId(), "OFFLINE", false, properties.addressTtlSeconds());
+    String serverId = nodeService.currentServerId();
+    nodeService.offlineNode(serverId, reason(request));
+    return LifecycleResponse.of(serverId, "OFFLINE", false, properties.addressTtlSeconds());
   }
 
   public record LifecycleRequest(String reason) {}

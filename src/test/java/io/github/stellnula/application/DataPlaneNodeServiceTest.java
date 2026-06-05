@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.stellnula.cache.DataPlaneNodeCache;
 import io.github.stellnula.config.DataPlaneProperties;
+import io.github.stellnula.domain.DataPlaneNodeEndpoint;
 import io.github.stellnula.domain.DataPlaneNodeRecord;
 import io.github.stellnula.domain.ServerEndpoint;
 import io.github.stellnula.repository.DataPlaneNodeRegistration;
@@ -25,7 +26,11 @@ class DataPlaneNodeServiceTest {
     DataPlaneNodeCache cache = new DataPlaneNodeCache();
     DataPlaneNodeService service =
         new DataPlaneNodeService(
-            properties(), repository, cache, new DataPlaneMetrics(new SimpleMeterRegistry()));
+            properties(),
+            endpointResolver(),
+            repository,
+            cache,
+            new DataPlaneMetrics(new SimpleMeterRegistry()));
 
     service.refreshNodeCache();
     assertThat(cache.endpoints()).extracting(ServerEndpoint::serverId).containsExactly("node-a");
@@ -65,9 +70,6 @@ class DataPlaneNodeServiceTest {
 
   private DataPlaneProperties properties() {
     return new DataPlaneProperties(
-        "node-local",
-        "http://127.0.0.1:8060",
-        "127.0.0.1:9090",
         "default",
         "default",
         100,
@@ -102,6 +104,10 @@ class DataPlaneNodeServiceTest {
         0.2,
         "test-sensitive-key",
         "sensitiveConfigAccess");
+  }
+
+  private DataPlaneNodeEndpointResolver endpointResolver() {
+    return () -> new DataPlaneNodeEndpoint("node-local", "http://127.0.0.1:8060", "127.0.0.1:9090");
   }
 
   private static class FakeDataPlaneNodeRepository implements DataPlaneNodeRepository {

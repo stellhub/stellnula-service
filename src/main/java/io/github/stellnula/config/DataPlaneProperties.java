@@ -8,9 +8,6 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "stellnula.data-plane")
 public record DataPlaneProperties(
-    @NotBlank String serverId,
-    @NotBlank String httpAddress,
-    @NotBlank String grpcAddress,
     @NotBlank String region,
     @NotBlank String zone,
     @Min(1) int weight,

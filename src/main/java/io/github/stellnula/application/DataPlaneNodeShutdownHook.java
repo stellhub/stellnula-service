@@ -19,16 +19,17 @@ public class DataPlaneNodeShutdownHook implements ApplicationListener<ContextClo
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
     try {
-      nodeService.drainNode(properties.serverId(), "spring-context-closing");
+      String serverId = nodeService.currentServerId();
+      nodeService.drainNode(serverId, "spring-context-closing");
       long waitMillis =
           Math.min(properties.nodeDrainMillis(), properties.gracefulShutdownWaitMillis());
       if (waitMillis > 0) {
         Thread.sleep(waitMillis);
       }
-      nodeService.offlineNode(properties.serverId(), "spring-context-closed");
+      nodeService.offlineNode(serverId, "spring-context-closed");
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
-      nodeService.offlineNode(properties.serverId(), "spring-context-close-interrupted");
+      nodeService.offlineNode(nodeService.currentServerId(), "spring-context-close-interrupted");
     } catch (RuntimeException ex) {
       log.warn("Failed to update data-plane node lifecycle during shutdown", ex);
     }

@@ -61,9 +61,6 @@ class DataPlaneHealthIndicatorTest {
 
   private DataPlaneProperties properties() {
     return new DataPlaneProperties(
-        "node-local",
-        "http://127.0.0.1:8060",
-        "127.0.0.1:9090",
         "default",
         "default",
         100,

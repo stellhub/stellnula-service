@@ -29,7 +29,7 @@ public class DataPlaneNodeHealthProbeScheduler {
     try {
       for (DataPlaneNodeRecord node :
           repository.findProbeCandidates(properties.nodeExpireMillis())) {
-        if (properties.serverId().equals(node.serverId())) {
+        if (nodeService.currentServerId().equals(node.serverId())) {
           continue;
         }
         repository.recordProbeResult(node.serverId(), probe(node));

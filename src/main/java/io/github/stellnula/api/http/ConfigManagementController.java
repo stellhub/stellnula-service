@@ -30,6 +30,10 @@ import org.springframework.web.server.ResponseStatusException;
 public class ConfigManagementController {
 
   private static final String CONTROL_PLANE_OPERATOR = "config-control-plane";
+  private static final String APP_CONFIG_NAMESPACE = "app-config";
+  private static final String COMMON_CONFIG_NAMESPACE = "common-config";
+  private static final String GOVERNANCE_NAMESPACE = "governance";
+  private static final String GOVERNANCE_GROUP = "service-governance";
 
   private final ConfigMutationService mutationService;
   private final SensitiveConfigCodec sensitiveConfigCodec;
@@ -58,9 +62,10 @@ public class ConfigManagementController {
       @PathVariable @NotBlank String configId,
       @RequestHeader(name = "X-Operator", required = false) String operator,
       @Valid @RequestBody ConfigRequest request) {
-    ConfigMutationResult result =
-        mutationService.upsert(
-            request.toCommand(configId, defaultText(operator, CONTROL_PLANE_OPERATOR)));
+    ConfigMutationCommand command =
+        request.toCommand(configId, defaultText(operator, CONTROL_PLANE_OPERATOR));
+    rejectDedicatedControlPlaneConfig(command);
+    ConfigMutationResult result = mutationService.upsert(command);
     return MutationResponse.from(result);
   }
 
@@ -70,9 +75,10 @@ public class ConfigManagementController {
       @PathVariable @NotBlank String configId,
       @RequestHeader(name = "X-Operator", required = false) String operator,
       @Valid @RequestBody ConfigDeleteRequest request) {
-    ConfigMutationResult result =
-        mutationService.delete(
-            request.toCommand(configId, defaultText(operator, CONTROL_PLANE_OPERATOR)));
+    ConfigMutationCommand command =
+        request.toCommand(configId, defaultText(operator, CONTROL_PLANE_OPERATOR));
+    rejectDedicatedControlPlaneConfig(command);
+    ConfigMutationResult result = mutationService.delete(command);
     return MutationResponse.from(result);
   }
 
@@ -111,6 +117,7 @@ public class ConfigManagementController {
       @NotBlank String ownerId,
       String namespace,
       String group,
+      String format,
       String contentType,
       boolean sensitive,
       String description,
@@ -131,6 +138,7 @@ public class ConfigManagementController {
           ownerId,
           namespace,
           group,
+          format,
           contentType,
           sensitive,
           description,
@@ -151,6 +159,7 @@ public class ConfigManagementController {
       @NotBlank String ownerId,
       String namespace,
       String group,
+      String format,
       String contentType,
       boolean sensitive,
       String description,
@@ -170,6 +179,7 @@ public class ConfigManagementController {
           ownerId,
           namespace,
           group,
+          format,
           contentType,
           sensitive,
           description,
@@ -204,6 +214,7 @@ public class ConfigManagementController {
           source.ownerId(),
           source.namespaceCode(),
           source.groupCode(),
+          null,
           source.contentType(),
           source.sensitive(),
           "Replicated from env " + source.env(),
@@ -291,6 +302,21 @@ public class ConfigManagementController {
 
   private boolean allowPlaintext(String sensitivePlaintext) {
     return "true".equalsIgnoreCase(sensitivePlaintext);
+  }
+
+  private void rejectDedicatedControlPlaneConfig(ConfigMutationCommand command) {
+    String ownerType = defaultText(command.ownerType(), "APPLICATION").toUpperCase();
+    String namespace = defaultText(command.namespaceCode(), "default");
+    String group = defaultText(command.groupCode(), "default");
+    if ("APPLICATION".equals(ownerType) && APP_CONFIG_NAMESPACE.equals(namespace)) {
+      throw new IllegalArgumentException("please use /api/v1/control-plane/app-config");
+    }
+    if ("PUBLIC".equals(ownerType) && COMMON_CONFIG_NAMESPACE.equals(namespace)) {
+      throw new IllegalArgumentException("please use /api/v1/control-plane/common-config");
+    }
+    if (GOVERNANCE_NAMESPACE.equals(namespace) && GOVERNANCE_GROUP.equals(group)) {
+      throw new IllegalArgumentException("please use /api/v1/governance/rules");
+    }
   }
 
   private static String defaultText(String value, String defaultValue) {

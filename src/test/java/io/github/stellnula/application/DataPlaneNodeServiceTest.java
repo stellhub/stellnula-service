@@ -77,6 +77,7 @@ class DataPlaneNodeServiceTest {
         30000,
         10000,
         5000,
+        15000,
         1000,
         64,
         1048576,

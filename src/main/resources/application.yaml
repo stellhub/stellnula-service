@@ -31,7 +31,8 @@ stellnula:
     address-ttl-seconds: ${STELLNULA_ADDRESS_TTL_SECONDS:60}
     watch-timeout-millis: ${STELLNULA_WATCH_TIMEOUT_MILLIS:30000}
     heartbeat-millis: ${STELLNULA_HEARTBEAT_MILLIS:10000}
-    refresh-interval-millis: ${STELLNULA_REFRESH_INTERVAL_MILLIS:5000}
+    refresh-interval-millis: ${STELLNULA_REFRESH_INTERVAL_MILLIS:1000}
+    full-refresh-interval-millis: ${STELLNULA_FULL_REFRESH_INTERVAL_MILLIS:15000}
     max-concurrent-watch: ${STELLNULA_MAX_CONCURRENT_WATCH:1000}
     max-request-labels: ${STELLNULA_MAX_REQUEST_LABELS:64}
     max-config-content-bytes: ${STELLNULA_MAX_CONFIG_CONTENT_BYTES:1048576}
@@ -73,3 +74,12 @@ stellflux:
       registration:
         instance-id: ${STELLFLUX_DATA_PLANE_INSTANCE_ID:stellnula-local}
         host: ${STELLFLUX_DATA_PLANE_HOST:127.0.0.1}
+  opentelemetry:
+    resource:
+      service-name: stellnula-service
+    logs:
+      enabled: false
+    metrics:
+      enabled: false
+    traces:
+      enabled: false

@@ -33,8 +33,8 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
   private static final String FIND_SCOPE_ID_SQL =
       """
       select s.id
-        from stn_config_definition d
-        join stn_config_scope s
+        from config_definition d
+        join config_scope s
           on s.config_id = d.config_id
        where d.config_id = ?
          and s.env = ?
@@ -48,7 +48,7 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
   private static final String FIND_CONFIG_SENSITIVE_SQL =
       """
       select sensitive
-        from stn_config_definition
+        from config_definition
        where config_id = ?
          and deleted = false
       """;
@@ -56,7 +56,7 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
   private static final String NEXT_GRAY_VERSION_SQL =
       """
       select coalesce(max(gray_version), 0) + 1
-        from stn_config_gray_rule
+        from config_gray_rule
        where config_id = ?
          and scope_id = ?
          and gray_name = ?
@@ -64,7 +64,7 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
 
   private static final String INSERT_REVISION_SQL =
       """
-      insert into stn_config_revision (
+      insert into config_revision (
           revision_type,
           config_id,
           scope_id,
@@ -73,13 +73,13 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
           revision_reason,
           payload,
           created_by
-      ) values ('GRAY_ROUTE', ?, ?, 'stn_config_gray_rule', ?, ?, ?::jsonb, ?)
+      ) values ('GRAY_ROUTE', ?, ?, 'config_gray_rule', ?, ?, ?::jsonb, ?)
       returning revision
       """;
 
   private static final String UPSERT_GRAY_RULE_SQL =
       """
-      insert into stn_config_gray_rule (
+      insert into config_gray_rule (
           config_id,
           scope_id,
           gray_name,
@@ -116,14 +116,14 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
 
   private static final String UPDATE_REVISION_SOURCE_SQL =
       """
-      update stn_config_revision
+      update config_revision
          set source_id = ?
        where revision = ?
       """;
 
   private static final String INSERT_CHANGE_EVENT_SQL =
       """
-      insert into stn_change_event (
+      insert into change_event (
           revision,
           config_id,
           scope_id,
@@ -135,7 +135,7 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
 
   private static final String INSERT_HISTORY_SQL =
       """
-      insert into stn_config_release_history (
+      insert into config_release_history (
           config_id,
           scope_id,
           release_type,
@@ -167,10 +167,10 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
              g.start_time,
              g.end_time,
              g.updated_at
-        from stn_config_gray_rule g
-        join stn_config_definition d
+        from config_gray_rule g
+        join config_definition d
           on d.config_id = g.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = g.scope_id
        where g.config_id = ?
          and g.gray_name = ?
@@ -197,10 +197,10 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
              g.priority,
              g.start_time,
              g.end_time
-        from stn_config_gray_rule g
-        join stn_config_definition d
+        from config_gray_rule g
+        join config_definition d
           on d.config_id = g.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = g.scope_id
        where g.status = 'ACTIVE'
          and g.end_time is not null
@@ -225,12 +225,12 @@ public class JdbcConfigGrayRuleRepository implements ConfigGrayRuleRepository {
              c.sdk_version,
              c.labels::text as labels,
              c.last_seen_at
-        from stn_config_gray_rule g
-        join stn_config_definition d
+        from config_gray_rule g
+        join config_definition d
           on d.config_id = g.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = g.scope_id
-        join stn_client_instance c
+        join client_instance c
           on c.env = s.env
          and c.namespace_code = d.namespace_code
          and c.group_code = d.group_code

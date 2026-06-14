@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.stellnula.cache.InMemoryConfigCache;
 import io.github.stellnula.config.DataPlaneProperties;
+import io.github.stellnula.domain.ClientContext;
 import io.github.stellnula.domain.ConfigEntry;
 import io.github.stellnula.domain.ConfigGrayImpactClient;
 import io.github.stellnula.domain.ConfigGrayMutationCommand;
@@ -12,51 +13,89 @@ import io.github.stellnula.domain.ConfigGrayMutationResult;
 import io.github.stellnula.domain.ConfigGrayRecord;
 import io.github.stellnula.domain.ConfigGrayRule;
 import io.github.stellnula.domain.ConfigGrayRuleExpiry;
+import io.github.stellnula.domain.ConfigScope;
+import io.github.stellnula.repository.ClientSnapshotState;
 import io.github.stellnula.repository.ConfigGrayRuleRepository;
 import io.github.stellnula.repository.ConfigReleaseRepository;
-import io.github.stellnula.repository.ConfigRevisionRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.actuate.health.Status;
 
-class DataPlaneHealthIndicatorTest {
+class ConfigCacheRefreshCoordinatorTest {
 
   @Test
-  void shouldKeepReadPathUpWhenRuntimeDbRefreshFails() {
+  void shouldRefreshLocalCacheImmediatelyAfterVisibleRevisionPublished() {
     InMemoryConfigCache cache = new InMemoryConfigCache();
-    DataPlaneProperties properties = properties();
-    DataPlaneMetrics metrics = new DataPlaneMetrics(new SimpleMeterRegistry());
+    ConfigEntry oldEntry = entry("1000", 1);
+    ConfigEntry newEntry = entry("2000", 2);
+    cache.rebuild(List.of(oldEntry), List.of(), List.of(oldEntry), List.of(), 100);
+    FakeConfigReleaseRepository repository = new FakeConfigReleaseRepository();
+    repository.changeEventRevisions = List.of(2L);
+    repository.releaseEvents = List.of(newEntry);
     ConfigCacheLoader loader =
-        new ConfigCacheLoader(new HealthyConfigReleaseRepository(), cache, metrics, properties);
-    loader.reload();
-    ConfigCacheRefreshScheduler refreshScheduler =
+        new ConfigCacheLoader(
+            repository, cache, new DataPlaneMetrics(new SimpleMeterRegistry()), properties());
+    ConfigCacheRefreshCoordinator coordinator = new ConfigCacheRefreshCoordinator(cache, loader);
+
+    coordinator.refreshVisibleRevision(2, "test");
+
+    assertThat(cache.latestRevision()).isEqualTo(2);
+    assertThat(cache.snapshot(context()).entries())
+        .singleElement()
+        .extracting(ConfigEntry::value)
+        .isEqualTo("2000");
+    assertThat(repository.loadLatestPublishedEntriesCalls).isZero();
+  }
+
+  @Test
+  void shouldKeepScheduledIncrementalRefreshFromFallingBackToFullReload() {
+    InMemoryConfigCache cache = new InMemoryConfigCache();
+    cache.rebuild(List.of(entry("1000", 1)), List.of(), List.of(entry("1000", 1)), List.of(), 100);
+    FakeConfigReleaseRepository repository = new FakeConfigReleaseRepository();
+    repository.maxRevision = 2;
+    ConfigCacheLoader loader =
+        new ConfigCacheLoader(
+            repository, cache, new DataPlaneMetrics(new SimpleMeterRegistry()), properties());
+    ConfigCacheRefreshScheduler scheduler =
         new ConfigCacheRefreshScheduler(
-            new FailingConfigReleaseRepository(),
-            new EmptyConfigRevisionRepository(),
+            repository,
+            () -> 2,
             cache,
             loader,
             new ConfigGrayRuleService(
                 new EmptyConfigGrayRuleRepository(),
                 new ObjectMapper(),
                 new GrayRuleMatcher(new ObjectMapper())),
-            metrics,
-            properties);
+            new DataPlaneMetrics(new SimpleMeterRegistry()),
+            properties());
 
-    refreshScheduler.refreshIfNeeded();
+    scheduler.refreshIfNeeded();
 
-    DataPlaneHealthIndicator indicator =
-        new DataPlaneHealthIndicator(cache, loader, refreshScheduler, properties);
-    var health = indicator.health();
+    assertThat(cache.latestRevision()).isEqualTo(1);
+    assertThat(repository.loadLatestPublishedEntriesCalls).isZero();
+  }
 
-    assertThat(health.getStatus()).isEqualTo(Status.UP);
-    assertThat(health.getDetails())
-        .containsEntry("readPathAvailable", true)
-        .containsEntry("dbWeakDependency", "DEGRADED")
-        .containsEntry("alertLevel", "WARN")
-        .containsEntry("currentRevision", 0L);
+  private ConfigEntry entry(String value, long revision) {
+    return new ConfigEntry(
+        "app-timeout",
+        "timeout",
+        "APPLICATION",
+        "order-service",
+        "default",
+        "default",
+        "KV",
+        value,
+        revision,
+        revision,
+        false,
+        new ConfigScope(1, "prod", "default", "default", "default", "INHERITABLE"));
+  }
+
+  private ClientContext context() {
+    return new ClientContext(
+        "order-service", "client-1", "prod", "default", "default", "default", "default", "default");
   }
 
   private DataPlaneProperties properties() {
@@ -67,7 +106,7 @@ class DataPlaneHealthIndicatorTest {
         60,
         30000,
         10000,
-        5000,
+        1000,
         15000,
         1000,
         64,
@@ -98,10 +137,16 @@ class DataPlaneHealthIndicatorTest {
         "sensitiveConfigAccess");
   }
 
-  private static class HealthyConfigReleaseRepository implements ConfigReleaseRepository {
+  private static class FakeConfigReleaseRepository implements ConfigReleaseRepository {
+
+    private List<Long> changeEventRevisions = List.of();
+    private List<ConfigEntry> releaseEvents = List.of();
+    private long maxRevision;
+    private int loadLatestPublishedEntriesCalls;
 
     @Override
     public List<ConfigEntry> loadLatestPublishedEntries() {
+      loadLatestPublishedEntriesCalls++;
       return List.of();
     }
 
@@ -117,12 +162,12 @@ class DataPlaneHealthIndicatorTest {
 
     @Override
     public List<ConfigEntry> loadReleaseEventsAfter(long revision, int limit) {
-      return List.of();
+      return releaseEvents;
     }
 
     @Override
     public List<Long> loadChangeEventRevisionsAfter(long revision, int limit) {
-      return List.of();
+      return changeEventRevisions;
     }
 
     @Override
@@ -137,27 +182,11 @@ class DataPlaneHealthIndicatorTest {
 
     @Override
     public long findMaxRevision() {
-      return 0;
+      return maxRevision;
     }
 
     @Override
-    public void upsertClientSnapshot(io.github.stellnula.repository.ClientSnapshotState state) {}
-  }
-
-  private static class FailingConfigReleaseRepository extends HealthyConfigReleaseRepository {
-
-    @Override
-    public long findMaxRevision() {
-      throw new IllegalStateException("database unavailable");
-    }
-  }
-
-  private static class EmptyConfigRevisionRepository implements ConfigRevisionRepository {
-
-    @Override
-    public long findLatestRevision() {
-      return 0;
-    }
+    public void upsertClientSnapshot(ClientSnapshotState state) {}
   }
 
   private static class EmptyConfigGrayRuleRepository implements ConfigGrayRuleRepository {

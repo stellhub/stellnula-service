@@ -28,9 +28,29 @@ public class ConfigCacheRefreshScheduler {
   private volatile OffsetDateTime lastFailureAt;
   private volatile String lastFailureMessage = "";
 
-  /** 定时扫描 PostgreSQL revision，优先增量刷新缓存，必要时全量重建兜底。 */
+  /** 定时扫描 PostgreSQL revision，只按增量刷新缓存。 */
   @Scheduled(fixedDelayString = "${stellnula.data-plane.refresh-interval-millis}")
   public void refreshIfNeeded() {
+    refreshIncrementalIfNeeded();
+  }
+
+  /** 定时全量重建缓存，作为增量窗口缺失或跨节点通知延迟时的兜底。 */
+  @Scheduled(fixedDelayString = "${stellnula.data-plane.full-refresh-interval-millis}")
+  public void refreshFullyAsFallback() {
+    if (Instant.now().isBefore(nextAllowedRefreshAt)) {
+      return;
+    }
+    try {
+      loader.reload();
+      consecutiveFailures = 0;
+      nextAllowedRefreshAt = Instant.EPOCH;
+      lastFailureMessage = "";
+    } catch (RuntimeException ex) {
+      recordRefreshFailure(ex);
+    }
+  }
+
+  private void refreshIncrementalIfNeeded() {
     if (Instant.now().isBefore(nextAllowedRefreshAt)) {
       return;
     }
@@ -40,27 +60,31 @@ public class ConfigCacheRefreshScheduler {
           Math.max(repository.findMaxRevision(), revisionRepository.findLatestRevision());
       long currentRevision = cache.latestRevision();
       if (remoteRevision > currentRevision) {
-        loader.reloadIncremental(currentRevision, remoteRevision);
+        loader.reloadIncrementalOnly(currentRevision, remoteRevision);
       }
       consecutiveFailures = 0;
       nextAllowedRefreshAt = Instant.EPOCH;
       lastFailureMessage = "";
     } catch (RuntimeException ex) {
-      consecutiveFailures++;
-      lastFailureAt = OffsetDateTime.now();
-      lastFailureMessage = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
-      long backoffMillis = nextBackoffMillis(consecutiveFailures);
-      nextAllowedRefreshAt = Instant.now().plusMillis(backoffMillis);
-      metrics.recordCacheRefreshFailure(consecutiveFailures);
-      log.warn(
-          "Failed to refresh Stellnula config cache; currentRevision={} consecutiveFailures={}"
-              + " nextRetryInMillis={} lastSuccessfulReloadAt={}",
-          cache.latestRevision(),
-          consecutiveFailures,
-          backoffMillis,
-          loader.lastSuccessfulReloadAt(),
-          ex);
+      recordRefreshFailure(ex);
     }
+  }
+
+  private void recordRefreshFailure(RuntimeException ex) {
+    consecutiveFailures++;
+    lastFailureAt = OffsetDateTime.now();
+    lastFailureMessage = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
+    long backoffMillis = nextBackoffMillis(consecutiveFailures);
+    nextAllowedRefreshAt = Instant.now().plusMillis(backoffMillis);
+    metrics.recordCacheRefreshFailure(consecutiveFailures);
+    log.warn(
+        "Failed to refresh Stellnula config cache; currentRevision={} consecutiveFailures={}"
+            + " nextRetryInMillis={} lastSuccessfulReloadAt={}",
+        cache.latestRevision(),
+        consecutiveFailures,
+        backoffMillis,
+        loader.lastSuccessfulReloadAt(),
+        ex);
   }
 
   private long nextBackoffMillis(long failures) {

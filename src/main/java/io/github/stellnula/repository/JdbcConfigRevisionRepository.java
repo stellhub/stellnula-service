@@ -11,7 +11,7 @@ public class JdbcConfigRevisionRepository implements ConfigRevisionRepository {
   private static final String LATEST_REVISION_SQL =
       """
       select coalesce(max(revision), 0) as latest_revision
-        from stn_config_revision
+        from config_revision
        where event_type in (
            'PUBLISHED',
            'DELETED',

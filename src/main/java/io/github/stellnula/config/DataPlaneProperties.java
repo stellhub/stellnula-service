@@ -15,6 +15,7 @@ public record DataPlaneProperties(
     @Min(1) int watchTimeoutMillis,
     @Min(1) long heartbeatMillis,
     @Min(1000) long refreshIntervalMillis,
+    @Min(1000) long fullRefreshIntervalMillis,
     @Min(1) int maxConcurrentWatch,
     @Min(1) int maxRequestLabels,
     @Min(1) int maxConfigContentBytes,

@@ -12,6 +12,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class StellnulaServiceApplication {
 
   public static void main(String[] args) {
+    System.setProperty("log.stdout", "true");
     SpringApplication.run(StellnulaServiceApplication.class, args);
   }
 }

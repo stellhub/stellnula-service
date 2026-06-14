@@ -20,7 +20,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
 
   private static final String UPSERT_NODE_SQL =
       """
-      insert into stn_data_plane_node (
+      insert into data_plane_node (
           server_id,
           http_address,
           grpc_address,
@@ -43,12 +43,12 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
           zone = excluded.zone,
           weight = excluded.weight,
           status = case
-              when stn_data_plane_node.status = 'DRAINING' and excluded.status = 'ACTIVE'
+              when data_plane_node.status = 'DRAINING' and excluded.status = 'ACTIVE'
                   then 'DRAINING'
               else excluded.status
           end,
           healthy = case
-              when stn_data_plane_node.status = 'DRAINING' and excluded.status = 'ACTIVE'
+              when data_plane_node.status = 'DRAINING' and excluded.status = 'ACTIVE'
                   then false
               else excluded.healthy
           end,
@@ -56,13 +56,13 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
           load_score = excluded.load_score,
           metadata = excluded.metadata,
           drain_started_at = case
-              when excluded.status = 'DRAINING' then coalesce(stn_data_plane_node.drain_started_at, now())
-              when excluded.status = 'ACTIVE' and stn_data_plane_node.status <> 'DRAINING' then null
-              else stn_data_plane_node.drain_started_at
+              when excluded.status = 'DRAINING' then coalesce(data_plane_node.drain_started_at, now())
+              when excluded.status = 'ACTIVE' and data_plane_node.status <> 'DRAINING' then null
+              else data_plane_node.drain_started_at
           end,
           offline_at = case
               when excluded.status = 'ACTIVE' then null
-              else stn_data_plane_node.offline_at
+              else data_plane_node.offline_at
           end,
           last_heartbeat_at = now(),
           updated_at = now()
@@ -81,7 +81,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
              active_watch_count,
              load_score,
              failure_count
-       from stn_data_plane_node
+       from data_plane_node
        where status = 'ACTIVE'
          and healthy = true
          and failure_count < ?
@@ -109,7 +109,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
              last_heartbeat_at,
              registered_at,
              updated_at
-        from stn_data_plane_node
+        from data_plane_node
        where status in ('ACTIVE', 'DRAINING')
          and last_heartbeat_at >= now() - (? * interval '1 millisecond')
        order by region, zone, server_id
@@ -135,13 +135,13 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
              last_heartbeat_at,
              registered_at,
              updated_at
-        from stn_data_plane_node
+        from data_plane_node
        order by region, zone, server_id
       """;
 
   private static final String MARK_EXPIRED_NODES_OFFLINE_SQL =
       """
-      update stn_data_plane_node
+      update data_plane_node
          set status = 'OFFLINE',
              healthy = false,
              updated_at = now()
@@ -151,7 +151,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
 
   private static final String UPDATE_NODE_STATUS_SQL =
       """
-      update stn_data_plane_node
+      update data_plane_node
          set status = ?,
              healthy = ?,
              metadata = metadata || ?::jsonb,
@@ -172,7 +172,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
 
   private static final String RECORD_PROBE_RESULT_SQL =
       """
-      update stn_data_plane_node
+      update data_plane_node
          set failure_count = case when ? then 0 else failure_count + 1 end,
              healthy = case when ? then (status = 'ACTIVE') else false end,
              last_probe_at = now(),
@@ -182,7 +182,7 @@ public class JdbcDataPlaneNodeRepository implements DataPlaneNodeRepository {
 
   private static final String MARK_PROBE_FAILED_NODES_OFFLINE_SQL =
       """
-      update stn_data_plane_node
+      update data_plane_node
          set status = 'OFFLINE',
              healthy = false,
              offline_at = coalesce(offline_at, now()),

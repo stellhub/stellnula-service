@@ -8,6 +8,7 @@ import io.github.stellnula.domain.ConfigMutationAction;
 import io.github.stellnula.domain.ConfigMutationCommand;
 import io.github.stellnula.domain.ConfigMutationResult;
 import io.github.stellnula.domain.ConfigRecord;
+import io.github.stellnula.domain.ControlPlaneAppConfigRecord;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,19 +35,20 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String UPSERT_DEFINITION_SQL =
       """
-      insert into stn_config_definition (
+      insert into config_definition (
           config_id,
           config_name,
           owner_type,
           owner_id,
           namespace_code,
           group_code,
+          config_format,
           content_type,
           sensitive,
           description,
           deleted,
           updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, false, now())
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, false, now())
       on conflict (config_id)
       do update set
           config_name = excluded.config_name,
@@ -54,6 +56,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
           owner_id = excluded.owner_id,
           namespace_code = excluded.namespace_code,
           group_code = excluded.group_code,
+          config_format = excluded.config_format,
           content_type = excluded.content_type,
           sensitive = excluded.sensitive,
           description = excluded.description,
@@ -63,7 +66,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String UPSERT_SCOPE_SQL =
       """
-      insert into stn_config_scope (
+      insert into config_scope (
           config_id,
           env,
           region,
@@ -82,14 +85,14 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
   private static final String NEXT_VERSION_SQL =
       """
       select coalesce(max(version), 0) + 1
-        from stn_config_release
+        from config_release
        where config_id = ?
          and scope_id = ?
       """;
 
   private static final String INSERT_REVISION_SQL =
       """
-      insert into stn_config_revision (
+      insert into config_revision (
           revision_type,
           config_id,
           scope_id,
@@ -98,13 +101,13 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
           revision_reason,
           payload,
           created_by
-      ) values (?, ?, ?, 'stn_config_release', ?, ?, ?::jsonb, ?)
+      ) values (?, ?, ?, 'config_release', ?, ?, ?::jsonb, ?)
       returning revision
       """;
 
   private static final String INSERT_RELEASE_SQL =
       """
-      insert into stn_config_release (
+      insert into config_release (
           release_no,
           config_id,
           scope_id,
@@ -122,7 +125,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String INSERT_GOVERNANCE_RULE_INDEX_SQL =
       """
-      insert into stn_governance_rule_index (
+      insert into governance_rule_index (
           config_id,
           scope_id,
           release_id,
@@ -156,14 +159,14 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String UPDATE_REVISION_SOURCE_SQL =
       """
-      update stn_config_revision
+      update config_revision
          set source_id = ?
        where revision = ?
       """;
 
   private static final String INSERT_CHANGE_EVENT_SQL =
       """
-      insert into stn_change_event (
+      insert into change_event (
           revision,
           config_id,
           scope_id,
@@ -175,7 +178,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String INSERT_HISTORY_SQL =
       """
-      insert into stn_config_release_history (
+      insert into config_release_history (
           config_id,
           scope_id,
           release_type,
@@ -190,7 +193,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
 
   private static final String INSERT_AUDIT_SQL =
       """
-      insert into stn_config_release_audit (
+      insert into config_release_audit (
           release_no,
           action,
           operator,
@@ -207,6 +210,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
              d.owner_id,
              d.namespace_code,
              d.group_code,
+             d.config_format,
              d.content_type,
              d.sensitive,
              s.id as scope_id,
@@ -222,10 +226,10 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
              r.checksum,
              r.release_status,
              r.released_at
-        from stn_config_definition d
-        join stn_config_scope s
+        from config_definition d
+        join config_scope s
           on s.config_id = d.config_id
-        join stn_config_release r
+        join config_release r
           on r.config_id = d.config_id
          and r.scope_id = s.id
        where d.config_id = ?
@@ -251,7 +255,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
                  r.checksum,
                  r.release_status,
                  r.released_at
-            from stn_config_release r
+            from config_release r
            order by r.config_id, r.scope_id, r.version desc
       )
       select d.config_id,
@@ -260,6 +264,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
              d.owner_id,
              d.namespace_code,
              d.group_code,
+             d.config_format,
              d.content_type,
              d.sensitive,
              s.id as scope_id,
@@ -280,11 +285,11 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
              gi.status as governance_status,
              gi.priority as governance_priority
         from latest_release r
-        join stn_governance_rule_index gi
+        join governance_rule_index gi
           on gi.release_id = r.release_id
-        join stn_config_definition d
+        join config_definition d
           on d.config_id = r.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = r.scope_id
        where d.namespace_code = 'governance'
          and d.group_code = 'service-governance'
@@ -294,7 +299,126 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
          and (? = '' or gi.rule_type = upper(?))
          and (? = '' or gi.target_service = ?)
          and (? = '' or gi.status = upper(?))
-       order by gi.priority asc, d.config_id
+      order by gi.priority asc, d.config_id
+      """;
+
+  private static final String FIND_CONTROL_PLANE_CONFIGS_SQL =
+      """
+      with latest_release as (
+          select distinct on (r.config_id, r.scope_id)
+                 r.config_id,
+                 r.scope_id,
+                 r.version,
+                 r.content,
+                 r.release_status,
+                 r.created_by,
+                 r.released_at
+            from config_release r
+           order by r.config_id, r.scope_id, r.version desc
+      ),
+      latest_published as (
+          select distinct on (r.config_id, r.scope_id)
+                 r.config_id,
+                 r.scope_id,
+                 r.released_at
+            from config_release r
+           where r.release_status = 'PUBLISHED'
+           order by r.config_id, r.scope_id, r.version desc
+      )
+      select d.config_id,
+             d.config_name,
+             d.owner_id,
+             d.namespace_code,
+             d.group_code,
+             d.config_format,
+             d.content_type,
+             d.sensitive,
+             d.description,
+             s.env,
+             s.cluster,
+             r.version,
+             r.content,
+             r.release_status,
+             r.created_by,
+             r.released_at,
+             p.released_at as published_at,
+             case when p.config_id is null then false else true end as format_locked
+        from latest_release r
+        join config_definition d
+          on d.config_id = r.config_id
+        join config_scope s
+          on s.id = r.scope_id
+        left join latest_published p
+          on p.config_id = r.config_id
+         and p.scope_id = r.scope_id
+       where d.owner_type = ?
+          and d.owner_id = ?
+          and d.namespace_code = ?
+          and d.deleted = false
+          and r.release_status <> 'DELETED'
+          and (? = '' or s.env = ?)
+          and (? = '' or s.cluster = ?)
+          and (? = '' or d.group_code = ?)
+        order by r.released_at desc, d.config_id
+      """;
+
+  private static final String FIND_CONTROL_PLANE_CONFIG_SQL =
+      """
+      with latest_release as (
+          select distinct on (r.config_id, r.scope_id)
+                 r.config_id,
+                 r.scope_id,
+                 r.version,
+                 r.content,
+                 r.release_status,
+                 r.created_by,
+                 r.released_at
+            from config_release r
+           order by r.config_id, r.scope_id, r.version desc
+      ),
+      latest_published as (
+          select distinct on (r.config_id, r.scope_id)
+                 r.config_id,
+                 r.scope_id,
+                 r.released_at
+            from config_release r
+           where r.release_status = 'PUBLISHED'
+           order by r.config_id, r.scope_id, r.version desc
+      )
+      select d.config_id,
+             d.config_name,
+             d.owner_id,
+             d.namespace_code,
+             d.group_code,
+             d.config_format,
+             d.content_type,
+             d.sensitive,
+             d.description,
+             s.env,
+             s.cluster,
+             r.version,
+             r.content,
+             r.release_status,
+             r.created_by,
+             r.released_at,
+             p.released_at as published_at,
+             case when p.config_id is null then false else true end as format_locked
+        from latest_release r
+        join config_definition d
+          on d.config_id = r.config_id
+        join config_scope s
+          on s.id = r.scope_id
+        left join latest_published p
+          on p.config_id = r.config_id
+         and p.scope_id = r.scope_id
+       where d.owner_type = ?
+         and d.owner_id = ?
+         and d.namespace_code = ?
+         and d.config_id = ?
+         and d.deleted = false
+         and r.release_status <> 'DELETED'
+       order by r.released_at desc
+       limit 1
       """;
 
   private final JdbcTemplate jdbcTemplate;
@@ -304,6 +428,17 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
   @Override
   @Transactional
   public ConfigMutationResult mutate(ConfigMutationCommand command) {
+    return mutate(command, releaseStatus(command.action()), true);
+  }
+
+  @Override
+  @Transactional
+  public ConfigMutationResult saveDraft(ConfigMutationCommand command) {
+    return mutate(command, "DRAFT", false);
+  }
+
+  private ConfigMutationResult mutate(
+      ConfigMutationCommand command, String releaseStatus, boolean clientVisible) {
     jdbcTemplate.update(
         UPSERT_DEFINITION_SQL,
         command.configId(),
@@ -312,6 +447,7 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
         command.ownerId(),
         command.namespaceCode(),
         command.groupCode(),
+        command.format(),
         command.contentType(),
         command.sensitive(),
         command.description());
@@ -330,7 +466,6 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
         findLatest(
             command.configId(), command.env(), command.region(), command.zone(), command.cluster());
     long version = nextVersion(command.configId(), resolvedScopeId);
-    String releaseStatus = releaseStatus(command.action());
     String eventType = eventType(command.action());
     long revision =
         insertRevision(
@@ -358,11 +493,13 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
     long releaseId = release == null ? 0 : release.id();
     OffsetDateTime releasedAt = release == null ? OffsetDateTime.now() : release.releasedAt();
     jdbcTemplate.update(UPDATE_REVISION_SOURCE_SQL, releaseId, revision);
-    insertGovernanceRuleIndex(
-        command, resolvedScopeId, releaseId, revision, releaseStatus, plainContent);
-    insertChangeEvent(command, resolvedScopeId, revision, eventType, plainContent, checksum);
-    insertHistory(command, resolvedScopeId, revision, before.orElse(null), plainContent);
-    insertAudit(command, releaseNo, before.orElse(null), plainContent, checksum);
+    if (clientVisible) {
+      insertGovernanceRuleIndex(
+          command, resolvedScopeId, releaseId, revision, releaseStatus, plainContent);
+      insertChangeEvent(command, resolvedScopeId, revision, eventType, plainContent, checksum);
+      insertHistory(command, resolvedScopeId, revision, before.orElse(null), plainContent);
+      insertAudit(command, releaseNo, before.orElse(null), plainContent, checksum);
+    }
     return new ConfigMutationResult(
         command.configId(),
         resolvedScopeId,
@@ -435,6 +572,45 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
         blankToEmpty(targetService),
         blankToEmpty(status),
         blankToEmpty(status));
+  }
+
+  @Override
+  public List<ControlPlaneAppConfigRecord> findControlPlaneConfigs(
+      String ownerType,
+      String ownerId,
+      String namespaceCode,
+      String env,
+      String cluster,
+      String group) {
+    return jdbcTemplate.query(
+        FIND_CONTROL_PLANE_CONFIGS_SQL,
+        this::mapControlPlaneConfig,
+        ownerType,
+        ownerId,
+        namespaceCode,
+        blankToEmpty(env),
+        blankToEmpty(env),
+        blankToEmpty(cluster),
+        blankToEmpty(cluster),
+        blankToEmpty(group),
+        blankToEmpty(group));
+  }
+
+  @Override
+  public Optional<ControlPlaneAppConfigRecord> findControlPlaneConfig(
+      String ownerType, String ownerId, String namespaceCode, String configId) {
+    try {
+      return Optional.ofNullable(
+          jdbcTemplate.queryForObject(
+              FIND_CONTROL_PLANE_CONFIG_SQL,
+              this::mapControlPlaneConfig,
+              ownerType,
+              ownerId,
+              namespaceCode,
+              configId));
+    } catch (EmptyResultDataAccessException ex) {
+      return Optional.empty();
+    }
   }
 
   private long nextVersion(String configId, long scopeId) {
@@ -600,6 +776,61 @@ public class JdbcConfigMutationRepository implements ConfigMutationRepository {
         nullableString(resultSet, "governance_target_service"),
         nullableString(resultSet, "governance_status"),
         nullableInteger(resultSet, "governance_priority"));
+  }
+
+  private ControlPlaneAppConfigRecord mapControlPlaneConfig(ResultSet resultSet, int rowNumber)
+      throws SQLException {
+    boolean sensitive = resultSet.getBoolean("sensitive");
+    String releaseStatus = resultSet.getString("release_status");
+    OffsetDateTime releasedAt = toOffsetDateTime(resultSet.getTimestamp("released_at"));
+    OffsetDateTime publishedAt = toOffsetDateTime(resultSet.getTimestamp("published_at"));
+    boolean published = "PUBLISHED".equals(releaseStatus);
+    return new ControlPlaneAppConfigRecord(
+        resultSet.getString("config_id"),
+        resultSet.getString("owner_id"),
+        resultSet.getString("config_name"),
+        resultSet.getString("description"),
+        resultSet.getString("env"),
+        resultSet.getString("cluster"),
+        resultSet.getString("group_code"),
+        resolveControlPlaneFormat(
+            resultSet.getString("config_format"),
+            resultSet.getString("config_name"),
+            resultSet.getString("content_type")),
+        resultSet.getLong("version"),
+        releaseStatus,
+        sensitiveConfigCodec.decryptIfSensitive(sensitive, resultSet.getString("content")),
+        resultSet.getString("created_by"),
+        releasedAt,
+        published ? releasedAt : publishedAt,
+        published || resultSet.getBoolean("format_locked"));
+  }
+
+  private String resolveControlPlaneFormat(
+      String configFormat, String configName, String contentType) {
+    String normalizedFormat = blankToEmpty(configFormat).toLowerCase();
+    if (isSupportedControlPlaneFormat(normalizedFormat)) {
+      return normalizedFormat;
+    }
+    int extensionIndex = configName == null ? -1 : configName.lastIndexOf('.');
+    if (extensionIndex >= 0 && extensionIndex < configName.length() - 1) {
+      String extension = configName.substring(extensionIndex + 1).toLowerCase();
+      if ("txt".equals(extension)) {
+        return "text";
+      }
+      if (isSupportedControlPlaneFormat(extension)) {
+        return extension;
+      }
+    }
+    return "KV".equalsIgnoreCase(contentType) ? "properties" : "yaml";
+  }
+
+  private boolean isSupportedControlPlaneFormat(String value) {
+    return "yaml".equals(value)
+        || "properties".equals(value)
+        || "json".equals(value)
+        || "toml".equals(value)
+        || "text".equals(value);
   }
 
   private String nullableString(ResultSet resultSet, String columnName) throws SQLException {

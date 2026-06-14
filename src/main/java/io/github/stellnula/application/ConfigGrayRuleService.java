@@ -12,6 +12,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,19 +24,29 @@ public class ConfigGrayRuleService {
   private final ConfigGrayRuleRepository repository;
   private final ObjectMapper objectMapper;
   private final GrayRuleMatcher grayRuleMatcher;
+  private ConfigCacheRefreshCoordinator cacheRefreshCoordinator;
 
   /** 创建、更新或发布灰度规则。 */
   public ConfigGrayMutationResult upsert(ConfigGrayMutationCommand command) {
     ConfigGrayMutationCommand normalized = normalize(command, null);
     validateJson(normalized.grayRules());
-    return repository.mutate(normalized);
+    ConfigGrayMutationResult result = repository.mutate(normalized);
+    refreshVisibleRevision(result, "gray-rule-upsert");
+    return result;
   }
 
   /** 结束灰度规则，让客户端回到当前基线配置或删除状态。 */
   public ConfigGrayMutationResult end(ConfigGrayMutationCommand command) {
     ConfigGrayMutationCommand normalized = normalize(command, "ENDED");
     validateJson(normalized.grayRules());
-    return repository.mutate(normalized);
+    ConfigGrayMutationResult result = repository.mutate(normalized);
+    refreshVisibleRevision(result, "gray-rule-end");
+    return result;
+  }
+
+  @Autowired(required = false)
+  void setCacheRefreshCoordinator(ConfigCacheRefreshCoordinator cacheRefreshCoordinator) {
+    this.cacheRefreshCoordinator = cacheRefreshCoordinator;
   }
 
   /** 查询灰度规则最新记录。 */
@@ -165,5 +176,11 @@ public class ConfigGrayRuleService {
 
   private String defaultText(String value, String defaultValue) {
     return value == null || value.isBlank() ? defaultValue : value;
+  }
+
+  private void refreshVisibleRevision(ConfigGrayMutationResult result, String source) {
+    if (cacheRefreshCoordinator != null) {
+      cacheRefreshCoordinator.refreshVisibleRevision(result.effectiveRevision(), source);
+    }
   }
 }

@@ -39,7 +39,7 @@ public class ConfigCacheLoader implements ApplicationRunner {
   }
 
   /** 从持久化层重建缓存。 */
-  public ReloadResult reload() {
+  public synchronized ReloadResult reload() {
     long startedNanos = System.nanoTime();
     List<ConfigEntry> entries = repository.loadLatestPublishedEntries();
     List<ConfigGrayRule> grayRules = repository.loadClientVisibleGrayRules();
@@ -62,7 +62,17 @@ public class ConfigCacheLoader implements ApplicationRunner {
   }
 
   /** 从持久化层按 revision 增量刷新缓存，窗口不足时回退到全量重建。 */
-  public ReloadResult reloadIncremental(long fromRevision, long targetRevision) {
+  public synchronized ReloadResult reloadIncremental(long fromRevision, long targetRevision) {
+    return reloadIncremental(fromRevision, targetRevision, true);
+  }
+
+  /** 从持久化层按 revision 增量刷新缓存，不回退到全量重建。 */
+  public synchronized boolean reloadIncrementalOnly(long fromRevision, long targetRevision) {
+    return reloadIncremental(fromRevision, targetRevision, false) != null;
+  }
+
+  private ReloadResult reloadIncremental(
+      long fromRevision, long targetRevision, boolean allowFullFallback) {
     long startedNanos = System.nanoTime();
     List<Long> changeEventRevisions =
         repository.loadChangeEventRevisionsAfter(fromRevision, properties.eventWindowSize());
@@ -73,28 +83,26 @@ public class ConfigCacheLoader implements ApplicationRunner {
     long maxChangeEventRevision =
         changeEventRevisions.stream().mapToLong(Long::longValue).max().orElse(0);
     if (changeEventRevisions.isEmpty() || maxChangeEventRevision < targetRevision) {
-      log.info(
-          "Change event window cannot catch up targetRevision={} maxChangeEventRevision={},"
-              + " fallback to full reload",
+      return fallbackOrSkip(
+          allowFullFallback,
+          "Change event window cannot catch up targetRevision={} maxChangeEventRevision={}",
           targetRevision,
           maxChangeEventRevision);
-      return reload();
     }
     long maxEventRevision = maxRevision(releaseEvents, grayRuleEvents);
     if (releaseEvents.isEmpty() && grayRuleEvents.isEmpty()) {
-      log.info(
-          "No cache events found after revision={}, fallback to full reload targetRevision={}",
+      return fallbackOrSkip(
+          allowFullFallback,
+          "No cache events found after revision={} targetRevision={}",
           fromRevision,
           targetRevision);
-      return reload();
     }
     if (maxEventRevision < targetRevision) {
-      log.info(
-          "Cache event window cannot catch up targetRevision={} maxEventRevision={}, fallback to"
-              + " full reload",
+      return fallbackOrSkip(
+          allowFullFallback,
+          "Cache event window cannot catch up targetRevision={} maxEventRevision={}",
           targetRevision,
           maxEventRevision);
-      return reload();
     }
     boolean applied =
         cache.applyIncremental(
@@ -114,6 +122,16 @@ public class ConfigCacheLoader implements ApplicationRunner {
         cache.latestRevision());
     return new ReloadResult(
         cache.entryCount(), cache.grayRuleCount(), cache.latestRevision(), duration, "INCREMENTAL");
+  }
+
+  private ReloadResult fallbackOrSkip(
+      boolean allowFullFallback, String message, Object firstArgument, Object secondArgument) {
+    if (allowFullFallback) {
+      log.info(message + ", fallback to full reload", firstArgument, secondArgument);
+      return reload();
+    }
+    log.info(message + ", skip full reload on incremental path", firstArgument, secondArgument);
+    return null;
   }
 
   /** 查询最后一次成功刷新时间。 */

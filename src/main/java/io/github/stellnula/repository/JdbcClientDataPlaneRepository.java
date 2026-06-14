@@ -12,7 +12,7 @@ public class JdbcClientDataPlaneRepository implements ClientDataPlaneRepository 
 
   private static final String UPSERT_CLIENT_INSTANCE_SQL =
       """
-      insert into stn_client_instance (
+      insert into client_instance (
           app_id,
           client_id,
           env,
@@ -34,7 +34,7 @@ public class JdbcClientDataPlaneRepository implements ClientDataPlaneRepository 
       do update set
           client_ip = excluded.client_ip,
           host_name = excluded.host_name,
-          sdk_version = coalesce(excluded.sdk_version, stn_client_instance.sdk_version),
+          sdk_version = coalesce(excluded.sdk_version, client_instance.sdk_version),
           labels = excluded.labels,
           metadata = excluded.metadata,
           status = excluded.status,
@@ -44,7 +44,7 @@ public class JdbcClientDataPlaneRepository implements ClientDataPlaneRepository 
 
   private static final String UPSERT_CLIENT_SUBSCRIPTION_SQL =
       """
-      insert into stn_client_subscription (
+      insert into client_subscription (
           app_id,
           client_id,
           env,

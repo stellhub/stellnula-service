@@ -8,6 +8,7 @@ public record ConfigMutationCommand(
     String ownerId,
     String namespaceCode,
     String groupCode,
+    String format,
     String contentType,
     boolean sensitive,
     String description,

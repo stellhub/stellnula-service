@@ -31,7 +31,8 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
                  content,
                  checksum,
                  release_status
-            from stn_config_release
+            from config_release
+           where release_status in ('PUBLISHED', 'DELETED')
            order by config_id, scope_id, version desc
       )
       select
@@ -55,12 +56,11 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              r.checksum,
              r.release_status
         from latest_release r
-        join stn_config_definition d
+        join config_definition d
           on d.config_id = r.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = r.scope_id
-       where r.release_status in ('PUBLISHED', 'DELETED')
-         and d.deleted = false
+       where d.deleted = false
        order by r.config_id, r.scope_id
       """;
 
@@ -81,10 +81,10 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              g.status,
              g.start_time,
              g.end_time
-        from stn_config_gray_rule g
-        join stn_config_definition d
+        from config_gray_rule g
+        join config_definition d
           on d.config_id = g.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = g.scope_id
        where g.status in ('ACTIVE', 'ENDED')
          and d.deleted = false
@@ -112,10 +112,10 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              r.content,
              r.checksum,
              r.release_status
-        from stn_config_release r
-        join stn_config_definition d
+        from config_release r
+        join config_definition d
           on d.config_id = r.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = r.scope_id
        where r.release_status in ('PUBLISHED', 'DELETED')
          and d.deleted = false
@@ -144,10 +144,10 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              r.content,
              r.checksum,
              r.release_status
-        from stn_config_release r
-        join stn_config_definition d
+        from config_release r
+        join config_definition d
           on d.config_id = r.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = r.scope_id
        where r.release_status in ('PUBLISHED', 'DELETED')
          and r.revision > ?
@@ -173,12 +173,12 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              case when h.release_type = 'GRAY_END' then 'ENDED' else 'ACTIVE' end as status,
              g.start_time,
              g.end_time
-        from stn_config_release_history h
-        join stn_config_gray_rule g
+        from config_release_history h
+        join config_gray_rule g
           on g.id = h.gray_rule_id
-        join stn_config_definition d
+        join config_definition d
           on d.config_id = h.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = h.scope_id
        where h.release_type in (
            'GRAY_CREATE',
@@ -197,7 +197,7 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
   private static final String LOAD_CHANGE_EVENT_REVISIONS_AFTER_SQL =
       """
       select revision
-        from stn_change_event
+        from change_event
        where revision > ?
          and event_type in (
              'PUBLISHED',
@@ -231,12 +231,12 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
              case when h.release_type = 'GRAY_END' then 'ENDED' else 'ACTIVE' end as status,
              g.start_time,
              g.end_time
-        from stn_config_release_history h
-        join stn_config_gray_rule g
+        from config_release_history h
+        join config_gray_rule g
           on g.id = h.gray_rule_id
-        join stn_config_definition d
+        join config_definition d
           on d.config_id = h.config_id
-        join stn_config_scope s
+        join config_scope s
           on s.id = h.scope_id
        where h.release_type in (
            'GRAY_CREATE',
@@ -257,13 +257,13 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
       """
       select greatest(
           coalesce((select max(revision)
-                      from stn_config_release
+                      from config_release
                      where release_status in ('PUBLISHED', 'DELETED')), 0),
           coalesce((select max(effective_revision)
-                      from stn_config_gray_rule
+                      from config_gray_rule
                      where status in ('ACTIVE', 'ENDED')), 0),
           coalesce((select max(revision)
-                      from stn_change_event
+                      from change_event
                      where event_type in (
                          'PUBLISHED',
                          'DELETED',
@@ -276,7 +276,7 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
                          'GRAY_ENDED'
                      )), 0),
           coalesce((select max(revision)
-                      from stn_config_revision
+                      from config_revision
                      where event_type in (
                          'PUBLISHED',
                          'DELETED',
@@ -294,7 +294,7 @@ public class JdbcConfigReleaseRepository implements ConfigReleaseRepository {
 
   private static final String UPSERT_CLIENT_SNAPSHOT_SQL =
       """
-      insert into stn_client_snapshot (
+      insert into client_snapshot (
           app_id,
           client_id,
           env,

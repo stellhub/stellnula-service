@@ -176,9 +176,17 @@ create table if not exists governance_rule_index (
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     constraint uk_governance_rule_index_release unique (release_id),
-    constraint ck_governance_rule_index_rule_type check (rule_type in ('ROUTE', 'RATE_LIMIT', 'CIRCUIT_BREAKER', 'DEGRADE')),
+    constraint ck_governance_rule_index_rule_type check (rule_type in ('ROUTE', 'RATE_LIMIT', 'CIRCUIT_BREAKER', 'DEGRADE', 'AUTH')),
     constraint ck_governance_rule_index_status check (status in ('DRAFT', 'ACTIVE', 'DISABLED'))
 );
+
+alter table governance_rule_index
+    drop constraint if exists ck_governance_rule_index_rule_type;
+
+alter table governance_rule_index
+    add constraint ck_governance_rule_index_rule_type check (
+        rule_type in ('ROUTE', 'RATE_LIMIT', 'CIRCUIT_BREAKER', 'DEGRADE', 'AUTH')
+    );
 
 comment on table governance_rule_index is '服务治理规则查询索引表，将治理规则 JSON 中的核心查询字段结构化保存';
 comment on column governance_rule_index.id is '自增主键';
@@ -192,7 +200,7 @@ comment on column governance_rule_index.env is '治理规则环境';
 comment on column governance_rule_index.region is '治理规则地域';
 comment on column governance_rule_index.zone is '治理规则可用区';
 comment on column governance_rule_index.cluster is '治理规则集群';
-comment on column governance_rule_index.rule_type is '治理规则类型，ROUTE 路由，RATE_LIMIT 限流，CIRCUIT_BREAKER 熔断，DEGRADE 降级';
+comment on column governance_rule_index.rule_type is '治理规则类型，ROUTE 路由，RATE_LIMIT 限流，CIRCUIT_BREAKER 熔断，DEGRADE 降级，AUTH 鉴权';
 comment on column governance_rule_index.target_service is '治理规则作用目标服务';
 comment on column governance_rule_index.status is '治理规则状态，DRAFT 草稿，ACTIVE 生效，DISABLED 禁用';
 comment on column governance_rule_index.priority is '治理规则优先级，数值越小优先级越高';

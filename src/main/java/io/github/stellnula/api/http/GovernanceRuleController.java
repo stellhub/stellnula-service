@@ -109,7 +109,7 @@ public class GovernanceRuleController {
           GOVERNANCE_GROUP,
           "json",
           defaultText(contentType, "FILE"),
-          false,
+          sensitive,
           description,
           env,
           region,

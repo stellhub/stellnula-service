@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build release package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+
+      - name: Build executable jar
+        run: mvn -B package
+
+      - name: Create release zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dir="target/release-package"
+          zip_name="stellnula-service-${GITHUB_REF_NAME}.zip"
+
+          rm -rf "${package_dir}"
+          mkdir -p "${package_dir}"
+          cp target/stellnula-service-*.jar "${package_dir}/stellnula-service.jar"
+          cp src/main/resources/application.yaml "${package_dir}/application.yaml"
+
+          (
+            cd "${package_dir}"
+            zip -r "../${zip_name}" stellnula-service.jar application.yaml
+          )
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: stellnula-service-${{ github.ref_name }}
+          path: target/stellnula-service-${{ github.ref_name }}.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: target/stellnula-service-${{ github.ref_name }}.zip

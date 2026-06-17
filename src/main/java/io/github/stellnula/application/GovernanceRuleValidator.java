@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 public class GovernanceRuleValidator {
 
   private static final Set<String> SUPPORTED_RULE_TYPES =
-      Set.of("ROUTE", "RATE_LIMIT", "CIRCUIT_BREAKER", "DEGRADE");
+      Set.of("ROUTE", "RATE_LIMIT", "CIRCUIT_BREAKER", "DEGRADE", "AUTH");
   private static final Set<String> SUPPORTED_STATUS = Set.of("DRAFT", "ACTIVE", "DISABLED");
 
   private final ObjectMapper objectMapper;
@@ -52,6 +52,7 @@ public class GovernanceRuleValidator {
       case "RATE_LIMIT" -> requireNode(root, "limit");
       case "CIRCUIT_BREAKER" -> requireNode(root, "breaker");
       case "DEGRADE" -> requireNode(root, "degrade");
+      case "AUTH" -> requireNode(root, "auth");
       default -> throw new IllegalArgumentException("unsupported governance ruleType: " + ruleType);
     }
   }
